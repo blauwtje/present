@@ -7,9 +7,9 @@ const SHOPPING_RESPONSE = {
 
 const IMMERSIVE_RESPONSE = {
   stores: [
-    { name: 'Coolblue', link: 'https://coolblue.nl/x', extracted_price: 120, extracted_shipping: 0 },
-    { name: 'bol.com', link: 'https://bol.com/x', extracted_price: 110, extracted_shipping: 4.95 },
-    { name: 'Some Random Marketplace Seller', link: 'https://sketchy.example/x', extracted_price: 50, extracted_shipping: 0 },
+    { name: 'Coolblue', link: 'https://coolblue.nl/x', extracted_price: 120, shipping_extracted: 0 },
+    { name: 'bol.com', link: 'https://bol.com/x', extracted_price: 110, shipping_extracted: 4.95 },
+    { name: 'Some Random Marketplace Seller', link: 'https://sketchy.example/x', extracted_price: 50, shipping_extracted: 0 },
     { name: 'MediaMarkt', link: 'https://mediamarkt.nl/x', extracted_total: 118 },
   ],
 };

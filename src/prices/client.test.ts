@@ -100,14 +100,43 @@ describe('getOffers', () => {
     expect(result).toEqual(stale);
   });
 
-  it('returns [] when there is no cache and the Worker errors', async () => {
+  it('throws when there is no cache and the Worker replies with an error status', async () => {
     setWorkerAddress('https://prices.example.workers.dev');
     const dbName = freshDbName();
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ offers: [] }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
 
-    const result = await getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 });
+    await expect(getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 })).rejects.toThrow();
+  });
 
-    expect(result).toEqual([]);
+  it('throws when there is no cache and the Worker rejects', async () => {
+    setWorkerAddress('https://prices.example.workers.dev');
+    const dbName = freshDbName();
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
+
+    await expect(getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 })).rejects.toThrow();
+  });
+
+  it('throws when there is no cache and the reply is not { offers: Offer[] }', async () => {
+    setWorkerAddress('https://prices.example.workers.dev');
+    const dbName = freshDbName();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ notOffers: true }) });
+
+    await expect(getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 })).rejects.toThrow();
+  });
+
+  it('throws when the reply has offers with non-numeric fields, and does not cache them', async () => {
+    setWorkerAddress('https://prices.example.workers.dev');
+    const dbName = freshDbName();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ offers: [{ shop: 'bol.com', price: '10', shipping: 0, total: 10, url: 'https://bol.com/x' }] }),
+    });
+
+    await expect(getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 })).rejects.toThrow();
+
+    const okFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ offers: [offer('coolblue')] }) });
+    const result = await getOffers('p1', 'lego set', { dbName, fetch: okFetch, now: () => 0 });
+    expect(result).toEqual([offer('coolblue')]);
   });
 
   it('caches offers separately per product id', async () => {

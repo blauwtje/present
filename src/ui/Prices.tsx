@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { getOffers, getWorkerAddress, type Offer } from '../prices/client';
 
@@ -12,6 +12,7 @@ type State =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'setup' }
+  | { kind: 'error' }
   | { kind: 'done'; offers: Offer[] };
 
 const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
@@ -19,20 +20,36 @@ const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR'
 /** Live Dutch shop prices for one product, fetched only after a tap. */
 export function Prices({ productId, query, onGoProfile }: Props) {
   const [state, setState] = useState<State>({ kind: 'idle' });
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Stops a tap or swipe inside the list from starting a card swipe. Motion starts its drag
+  // from a native pointerdown listener on the card article itself, which fires before React's
+  // root-delegated onPointerDown, so the guard must also be a native listener, registered on
+  // this wrapper so it runs (and stops bubbling) before the article ever sees the event.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const stop = (e: PointerEvent) => e.stopPropagation();
+    el.addEventListener('pointerdown', stop);
+    return () => el.removeEventListener('pointerdown', stop);
+  }, []);
 
   async function compare() {
     setState({ kind: 'loading' });
-    const offers = await getOffers(productId, query);
-    if (offers.length === 0 && !getWorkerAddress()) {
-      setState({ kind: 'setup' });
-      return;
+    try {
+      const offers = await getOffers(productId, query);
+      if (offers.length === 0 && !getWorkerAddress()) {
+        setState({ kind: 'setup' });
+        return;
+      }
+      setState({ kind: 'done', offers: [...offers].sort((a, b) => a.total - b.total) });
+    } catch {
+      setState({ kind: 'error' });
     }
-    setState({ kind: 'done', offers: [...offers].sort((a, b) => a.total - b.total) });
   }
 
   return (
-    // Keeps a tap or scroll inside the list from starting a card swipe.
-    <div className="prices" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="prices" ref={rootRef}>
       {state.kind === 'idle' && (
         <motion.button type="button" className="btn prices-open" whileTap={{ scale: 0.96 }} onClick={compare}>
           Vergelijk prijzen
@@ -48,6 +65,14 @@ export function Prices({ productId, query, onGoProfile }: Props) {
           <p>Om prijzen te vergelijken heb je eerst een prijshulp nodig. Vul het adres in bij je profiel.</p>
           <button type="button" className="btn quiet" onClick={onGoProfile}>
             Naar profiel
+          </button>
+        </div>
+      )}
+      {state.kind === 'error' && (
+        <div className="notice" data-tone="negative" role="status">
+          <p>Prijzen ophalen lukte niet. Probeer het later opnieuw.</p>
+          <button type="button" className="btn quiet" onClick={compare}>
+            Opnieuw proberen
           </button>
         </div>
       )}

@@ -213,7 +213,7 @@ function OwnedList({ profile, addOwned, saveOwned, removeOwned, search }: Props)
   return (
     <div>
       <h2>Heb ik al</h2>
-      <p className="small muted">Dit krijg je niet nog eens. Wel dingen die erbij passen. Het cijfer zegt hoe blij je ermee bent: hoe hoger, hoe meer het meetelt.</p>
+      <p className="small muted">Wat je al hebt. Dat en wat er sterk op lijkt krijg je niet meer als idee.</p>
       {profile.owned.length === 0 ? (
         <p className="small muted empty-hint">Nog niets. Zoek hieronder of typ het zelf in.</p>
       ) : (
@@ -224,7 +224,7 @@ function OwnedList({ profile, addOwned, saveOwned, removeOwned, search }: Props)
                 {o.text}
                 {o.productId && <span className="small muted"> · uit de catalogus</span>}
               </span>
-              <RatingSelect value={o.rating ?? 7} label={`Cijfer voor ${o.text}`} onChange={(r) => saveOwned({ ...o, rating: r })} />
+              <RatingSelect value={o.rating ?? 7} label={`Cijfer voor ${o.text} (ter herinnering, telt niet mee in suggesties)`} onChange={(r) => saveOwned({ ...o, rating: r })} />
               <motion.button className="btn quiet" type="button" whileTap={tap} transition={tapTransition} onClick={() => removeOwned(o.id)} aria-label={`Verwijder ${o.text}`}>
                 Weg
               </motion.button>

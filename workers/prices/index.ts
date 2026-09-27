@@ -55,18 +55,16 @@ const ALLOWED_LOOKUP = new Map(ALLOWED_SHOPS.map((shop) => [normalize(shop), sho
 /** Returns the canonical allowlisted shop name for a store label, or null if unknown. */
 export function matchAllowedShop(storeName: string | undefined | null): string | null {
   if (!storeName) return null;
-  const key = normalize(storeName);
-  for (const [allowedKey, canonical] of ALLOWED_LOOKUP) {
-    if (key === allowedKey || key.includes(allowedKey)) return canonical;
-  }
-  return null;
+  return ALLOWED_LOOKUP.get(normalize(storeName)) ?? null;
 }
 
+/** Parses a price/shipping value, including Dutch-formatted strings ("." thousands, "," decimal). */
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const cleaned = value.replace(/[^\d,.-]/g, '').replace(',', '.');
-    const n = Number.parseFloat(cleaned);
+    const cleaned = value.replace(/[^\d,.-]/g, '');
+    const normalized = cleaned.includes(',') ? cleaned.replace(/\./g, '').replace(',', '.') : cleaned;
+    const n = Number.parseFloat(normalized);
     return Number.isFinite(n) ? n : null;
   }
   return null;
@@ -86,7 +84,7 @@ interface SerpApiStore {
   link?: string;
   extracted_price?: unknown;
   price?: unknown;
-  extracted_shipping?: unknown;
+  shipping_extracted?: unknown;
   shipping?: unknown;
   extracted_total?: unknown;
   total?: unknown;
@@ -114,7 +112,7 @@ export function mapStoresToOffers(immersiveResponse: SerpApiImmersiveResponse): 
     const shop = matchAllowedShop(store.name ?? store.store ?? null);
     if (!shop || !store.link) continue;
 
-    const shipping = toNumber(store.extracted_shipping ?? store.shipping) ?? 0;
+    const shipping = toNumber(store.shipping_extracted ?? store.shipping) ?? 0;
     const total = toNumber(store.extracted_total ?? store.total);
     const price = toNumber(store.extracted_price ?? store.price);
 
