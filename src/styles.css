@@ -755,3 +755,16 @@ input[type='search'] {
   font-family: var(--display);
   color: var(--ribbon);
 }
+
+.how {
+  padding-left: 20px;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.how a,
+.sections p a {
+  color: var(--ribbon);
+  font-weight: 600;
+}

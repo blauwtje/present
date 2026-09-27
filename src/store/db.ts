@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Filters, Interest, Owned, Rating } from '../engine/types';
 import type { ProfileData } from '../engine/protocol';
+import type { SyncSettings } from '../sync/gist';
 
 interface CadeauDB extends DBSchema {
   interests: { key: string; value: Interest };
@@ -30,6 +31,16 @@ export function makeStore(db: IDBPDatabase<CadeauDB>) {
       return ((await db.get('settings', 'filters')) as Filters | undefined) ?? {};
     },
     putFilters: (f: Filters) => db.put('settings', f, 'filters'),
+    async getSync(): Promise<SyncSettings | undefined> {
+      return (await db.get('settings', 'sync')) as SyncSettings | undefined;
+    },
+    putSync: (s: SyncSettings) => db.put('settings', s, 'sync'),
+    deleteSync: () => db.delete('settings', 'sync'),
+    /** Time of the last change made on this device. */
+    async getChangedAt(): Promise<number> {
+      return ((await db.get('settings', 'changedAt')) as number | undefined) ?? 0;
+    },
+    putChangedAt: (t: number) => db.put('settings', t, 'changedAt'),
     /** Add everything in `data`, overwriting entries with the same id, in one transaction. */
     async mergeAll(data: ProfileData) {
       const tx = db.transaction(['interests', 'owned', 'ratings'], 'readwrite');
