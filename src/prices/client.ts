@@ -62,7 +62,7 @@ export interface GetOffersOptions {
  * from the configured Worker and cached. `query` is the search text sent to
  * the Worker so it can look the product up on Dutch shops.
  *
- * Returns the (possibly stale) cached offers, or `[]`, when no Worker
+ * The Worker replies `{ offers }`. Returns the (possibly stale) cached offers, or `[]`, when no Worker
  * address is configured or the fetch fails.
  */
 export async function getOffers(productId: string, query: string, options: GetOffersOptions = {}): Promise<Offer[]> {
@@ -84,7 +84,7 @@ export async function getOffers(productId: string, query: string, options: GetOf
     if (!res.ok) {
       return cached?.offers ?? [];
     }
-    const offers = (await res.json()) as Offer[];
+    const { offers } = (await res.json()) as { offers: Offer[] };
     await db.put('offers', { at: now, offers }, productId);
     return offers;
   } catch {

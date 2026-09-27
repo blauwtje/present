@@ -35,7 +35,7 @@ describe('getOffers', () => {
   it('fetches from the Worker and caches the result when there is no cache yet', async () => {
     setWorkerAddress('https://prices.example.workers.dev');
     const offers = [offer('bol.com')];
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => offers });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ offers }) });
     const dbName = freshDbName();
 
     const result = await getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 1000 });
@@ -47,7 +47,7 @@ describe('getOffers', () => {
   it('returns the cached offers without fetching again within 7 days', async () => {
     setWorkerAddress('https://prices.example.workers.dev');
     const offers = [offer('coolblue')];
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => offers });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ offers }) });
     const dbName = freshDbName();
     const day = 24 * 60 * 60 * 1000;
 
@@ -64,8 +64,8 @@ describe('getOffers', () => {
     const newer = [offer('bol.com')];
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => older })
-      .mockResolvedValueOnce({ ok: true, json: async () => newer });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ offers: older }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ offers: newer }) });
     const dbName = freshDbName();
     const day = 24 * 60 * 60 * 1000;
 
@@ -91,7 +91,7 @@ describe('getOffers', () => {
     const stale = [offer('coolblue')];
     const dbName = freshDbName();
     const day = 24 * 60 * 60 * 1000;
-    const okFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => stale });
+    const okFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ offers: stale }) });
     await getOffers('p1', 'lego set', { dbName, fetch: okFetch, now: () => 0 });
 
     const failingFetch = vi.fn().mockRejectedValue(new Error('network down'));
@@ -103,7 +103,7 @@ describe('getOffers', () => {
   it('returns [] when there is no cache and the Worker errors', async () => {
     setWorkerAddress('https://prices.example.workers.dev');
     const dbName = freshDbName();
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => [] });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ offers: [] }) });
 
     const result = await getOffers('p1', 'lego set', { dbName, fetch: fetchMock, now: () => 0 });
 
@@ -115,8 +115,8 @@ describe('getOffers', () => {
     const dbName = freshDbName();
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => [offer('bol.com')] })
-      .mockResolvedValueOnce({ ok: true, json: async () => [offer('coolblue')] });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ offers: [offer('bol.com')] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ offers: [offer('coolblue')] }) });
 
     const a = await getOffers('p1', 'a', { dbName, fetch: fetchMock, now: () => 0 });
     const b = await getOffers('p2', 'b', { dbName, fetch: fetchMock, now: () => 0 });
