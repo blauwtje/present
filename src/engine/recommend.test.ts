@@ -13,6 +13,7 @@ const items: [string, number[], number, string][] = [
   ['ball', [0, 0, 1, 0], 1500, 'Sports_and_Outdoors'],
   ['novel', [0, 0, 0, 1], 1200, 'Books'],
   ['cookbook', [0.7, 0, 0, 0.7], 1800, 'Books'],
+  ['wokpan', [0.8, 0, 0.6, 0], 3500, 'Home_and_Kitchen'],
 ];
 
 function makeCatalog(): Catalog {
@@ -71,10 +72,23 @@ describe('recommend', () => {
     expect(shown).not.toContain('pan2');
   });
 
+  it('drops a same-kind product as a near-duplicate of an owned item, even when it is not a close text match', () => {
+    const out = recommend(cat, {
+      interests: [cooking],
+      rated: [],
+      owned: [{ vector: vec(1, 0, 0, 0), label: 'mijn pan' }],
+      filters: {},
+      count: 8,
+    });
+    const shown = ids(cat, out);
+    expect(shown).not.toContain('wokpan'); // sim 0.8: same kind as the owned pan, now caught by the lowered threshold
+    expect(shown).toContain('cookbook'); // sim 0.707: not close enough to count as owned
+  });
+
   it('a high score pulls its neighbours up, a low score pushes them down', () => {
     const liked = recommend(cat, { interests: [], rated: [{ index: 3, score: 5, label: 'guitar' }], owned: [], filters: {}, count: 3 });
     expect(ids(cat, liked)[0]).toBe('strings');
-    const disliked = recommend(cat, { interests: [], rated: [{ index: 3, score: 1, label: 'guitar' }], owned: [], filters: {}, count: 7 });
+    const disliked = recommend(cat, { interests: [], rated: [{ index: 3, score: 1, label: 'guitar' }], owned: [], filters: {}, count: 8 });
     expect(ids(cat, disliked).at(-1)).toBe('strings');
   });
 
