@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { EngineClient, type Status } from './engine/client';
 import type { ProfileData, SuggestedProduct } from './engine/protocol';
 import type { Filters, Interest, Owned } from './engine/types';
@@ -176,50 +177,75 @@ export default function App() {
     if (v === 'ideas' && ready && queue.length === 0) refresh(profile, filters);
   };
 
+  // Explicit gate (rather than relying only on MotionConfig's own reduction) so the
+  // cross-fade and nav-indicator slide each have a recorded, auditable instant path.
+  const reducedMotion = useReducedMotion();
+  const screenKey = status.state !== 'ready' ? 'loading' : view;
+  const tabs: { id: View; label: string }[] = [
+    { id: 'ideas', label: 'Ideeën' },
+    { id: 'profile', label: 'Profiel' },
+    { id: 'rated', label: 'Gescoord' },
+  ];
+
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <div className="app">
         <div className="page">
-          {status.state !== 'ready' ? (
-            <Loading status={status} />
-          ) : view === 'ideas' ? (
-            <Suggestions
-              queue={queue}
-              thinking={thinking}
-              error={error}
-              status={status}
-              profile={profile}
-              filters={filters}
-              onRate={rate}
-              onFilters={changeFilters}
-              onGoProfile={() => go('profile')}
-            />
-          ) : view === 'profile' ? (
-            <Profile profile={profile} {...profileActions} />
-          ) : (
-            <Rated engine={engine} ratings={profile.ratings} onChange={changeRating} />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={screenKey}
+              initial={{ opacity: reducedMotion ? 1 : 0 }}
+              animate={{ opacity: 1, transition: { duration: reducedMotion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] } }}
+              exit={{ opacity: reducedMotion ? 1 : 0, transition: { duration: reducedMotion ? 0 : 0.12, ease: [0.3, 0, 0.8, 0.15] } }}
+            >
+              {status.state !== 'ready' ? (
+                <Loading status={status} />
+              ) : view === 'ideas' ? (
+                <Suggestions
+                  queue={queue}
+                  thinking={thinking}
+                  error={error}
+                  status={status}
+                  profile={profile}
+                  filters={filters}
+                  onRate={rate}
+                  onFilters={changeFilters}
+                  onGoProfile={() => go('profile')}
+                />
+              ) : view === 'profile' ? (
+                <Profile profile={profile} {...profileActions} />
+              ) : (
+                <Rated engine={engine} ratings={profile.ratings} onChange={changeRating} />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
       <nav className="nav" aria-label="Hoofdmenu">
         <ul>
-          <li>
-            <button type="button" aria-current={view === 'ideas' ? 'page' : undefined} onClick={() => go('ideas')}>
-              Ideeën
-            </button>
-          </li>
-          <li>
-            <button type="button" aria-current={view === 'profile' ? 'page' : undefined} onClick={() => go('profile')}>
-              Profiel
-            </button>
-          </li>
-          <li>
-            <button type="button" aria-current={view === 'rated' ? 'page' : undefined} onClick={() => go('rated')}>
-              Gescoord<span className="count">{profile.ratings.length || ''}</span>
-            </button>
-          </li>
+          {tabs.map((tab) => (
+            <li key={tab.id}>
+              <motion.button
+                type="button"
+                aria-current={view === tab.id ? 'page' : undefined}
+                onClick={() => go(tab.id)}
+                whileTap={reducedMotion ? undefined : { scale: 0.96 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {tab.label}
+                {tab.id === 'rated' && <span className="count">{profile.ratings.length || ''}</span>}
+                {view === tab.id && (
+                  <motion.span
+                    className="nav-indicator"
+                    layoutId="nav-indicator"
+                    transition={reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                )}
+              </motion.button>
+            </li>
+          ))}
         </ul>
       </nav>
-    </>
+    </MotionConfig>
   );
 }

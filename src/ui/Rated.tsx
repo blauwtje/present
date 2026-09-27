@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { EngineClient } from '../engine/client';
 import type { Product, Rating } from '../engine/types';
-import { price } from './format';
+import { categoryHueIndex, price } from './format';
 import { ScoreRow } from './ScoreRow';
 
 interface Props {
@@ -31,14 +31,25 @@ export function Rated({ engine, ratings, onChange }: Props) {
         <span className="small muted">{ratings.length === 1 ? '1 product' : `${ratings.length} producten`}</span>
       </div>
       {ratings.length === 0 ? (
-        <p className="muted">Nog niets gescoord. Scores die je bij Ideeën geeft, komen hier.</p>
+        <p className="rated-empty muted">Nog niets gescoord. Scores die je bij Ideeën geeft, komen hier.</p>
       ) : (
         <ul className="list rated">
           {newestFirst.map((r) => {
             const p = products.get(r.productId);
+            const hue = p?.category ? categoryHueIndex(p.category) : null;
             return (
               <li key={r.productId}>
-                {p ? <img src={p.image} alt="" width={48} height={48} loading="lazy" /> : <span />}
+                {p ? (
+                  <div
+                    className={hue === null ? 'rated-thumb' : 'rated-thumb rated-thumb--hued'}
+                    style={hue === null ? undefined : { ['--cat-h' as string]: `var(--hue-cat-${hue})` }}
+                  >
+                    <img src={p.image} alt="" width={40} height={40} loading="lazy" />
+                  </div>
+                ) : (
+                  // Unresolved: rating exists, product record hasn't loaded (or was removed) yet.
+                  <div className="rated-placeholder" aria-hidden="true" />
+                )}
                 <div style={{ minWidth: 0 }}>
                   <div className="row">
                     <span className="grow clip">{p?.title ?? r.productId}</span>

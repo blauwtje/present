@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import type { ProfileData } from '../engine/protocol';
 import type { Interest, Owned, Product } from '../engine/types';
 import { price } from './format';
@@ -21,13 +22,33 @@ interface Props {
 
 const weightWords = ['een beetje', 'wel', 'best veel', 'veel', 'heel veel'];
 
+// Soft enter for list rows/results: matches the panel-motion token (--dur-panel, --ease-out).
+// MotionConfig reducedMotion="user" (App.tsx) skips this to an instant final frame when reduced motion is on.
+const softEnter = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.26, ease: [0.16, 1, 0.3, 1] as const },
+};
+
+// Feedback-scale tap: matches --dur-feedback.
+const tap = { scale: 0.96 };
+const tapTransition = { duration: 0.15 };
+
 function Weight({ value, onPick, name }: { value: number; onPick: (w: number) => void; name: string }) {
   return (
     <div className="weight" role="group" aria-label={`Hoe belangrijk is ${name}?`}>
       {[1, 2, 3, 4, 5].map((w) => (
-        <button key={w} type="button" aria-pressed={value === w} aria-label={`${w}: ${weightWords[w - 1]}`} onClick={() => onPick(w)}>
+        <motion.button
+          key={w}
+          type="button"
+          whileTap={tap}
+          transition={tapTransition}
+          aria-pressed={value === w}
+          aria-label={`${w}: ${weightWords[w - 1]}`}
+          onClick={() => onPick(w)}
+        >
           {w}
-        </button>
+        </motion.button>
       ))}
       <span className="small muted">{weightWords[value - 1]}</span>
     </div>
@@ -66,47 +87,60 @@ function Interests({ profile, saveInterest, addInterest, removeInterest }: Props
     <div>
       <h2>Wat ik leuk vind</h2>
       <p className="small muted">Schrijf het zoals je het zegt, bijvoorbeeld &ldquo;koken met vrienden&rdquo; of &ldquo;oude jazzplaten&rdquo;.</p>
-      <ul className="list">
-        {profile.interests.map((i) => (
-          <li key={i.id}>
-            <div className="row">
-              {editing === i.id ? (
-                <form
-                  className="row grow"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (draft.trim()) await saveInterest({ ...i, text: draft.trim() });
-                    setEditing(null);
-                  }}
-                >
-                  <input type="text" className="grow" aria-label="Interesse" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
-                  <button className="btn" type="submit">
-                    Klaar
-                  </button>
-                </form>
-              ) : (
-                <>
-                  <span className="grow">{i.text}</span>
-                  <button
-                    className="btn quiet"
-                    type="button"
-                    onClick={() => {
-                      setEditing(i.id);
-                      setDraft(i.text);
+      {profile.interests.length === 0 ? (
+        <p className="small muted empty-hint">Nog geen interesses. Voeg er hieronder een toe.</p>
+      ) : (
+        <ul className="list">
+          {profile.interests.map((i) => (
+            <motion.li key={i.id} {...softEnter}>
+              <div className="row">
+                {editing === i.id ? (
+                  <form
+                    className="row grow"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (draft.trim()) await saveInterest({ ...i, text: draft.trim() });
+                      setEditing(null);
                     }}
                   >
-                    Wijzig
-                  </button>
-                  <button className="btn quiet" type="button" onClick={() => removeInterest(i.id)} aria-label={`Verwijder ${i.text}`}>
-                    Weg
-                  </button>
-                </>
-              )}
-            </div>
-            <Weight value={i.weight} name={i.text} onPick={(w) => saveInterest({ ...i, weight: w })} />
-          </li>
-        ))}
-      </ul>
+                    <input type="text" className="grow" aria-label="Interesse" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
+                    <motion.button className="btn" type="submit" whileTap={tap} transition={tapTransition}>
+                      Klaar
+                    </motion.button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="grow">{i.text}</span>
+                    <motion.button
+                      className="btn quiet"
+                      type="button"
+                      whileTap={tap}
+                      transition={tapTransition}
+                      onClick={() => {
+                        setEditing(i.id);
+                        setDraft(i.text);
+                      }}
+                    >
+                      Wijzig
+                    </motion.button>
+                    <motion.button
+                      className="btn quiet"
+                      type="button"
+                      whileTap={tap}
+                      transition={tapTransition}
+                      onClick={() => removeInterest(i.id)}
+                      aria-label={`Verwijder ${i.text}`}
+                    >
+                      Weg
+                    </motion.button>
+                  </>
+                )}
+              </div>
+              <Weight value={i.weight} name={i.text} onPick={(w) => saveInterest({ ...i, weight: w })} />
+            </motion.li>
+          ))}
+        </ul>
+      )}
       <form
         className="add-form"
         onSubmit={(e) => {
@@ -120,9 +154,9 @@ function Interests({ profile, saveInterest, addInterest, removeInterest }: Props
         </label>
         <Weight value={weight} name="deze interesse" onPick={setWeight} />
         <div>
-          <button className="btn primary" type="submit" disabled={!text.trim()}>
+          <motion.button className="btn primary" type="submit" whileTap={tap} transition={tapTransition} disabled={!text.trim()}>
             Toevoegen
-          </button>
+          </motion.button>
         </div>
       </form>
     </div>
@@ -130,8 +164,10 @@ function Interests({ profile, saveInterest, addInterest, removeInterest }: Props
 }
 
 function RatingSelect({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  // Same coral-to-ribbon score ramp as ScoreRow/Weight, interpolated continuously across 1-10.
+  const mix = `${Math.round(((value - 1) / 9) * 100)}%`;
   return (
-    <label className="rating-select">
+    <label className="rating-select" style={{ ['--rating-mix' as string]: mix }}>
       <span className="visually-hidden">{label}</span>
       <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
         {Array.from({ length: 10 }, (_, i) => 10 - i).map((n) => (
@@ -176,20 +212,24 @@ function OwnedList({ profile, addOwned, saveOwned, removeOwned, search }: Props)
     <div>
       <h2>Heb ik al</h2>
       <p className="small muted">Dit krijg je niet nog eens. Wel dingen die erbij passen. Het cijfer zegt hoe blij je ermee bent: hoe hoger, hoe meer het meetelt.</p>
-      <ul className="list">
-        {profile.owned.map((o) => (
-          <li key={o.id} className="row">
-            <span className="grow">
-              {o.text}
-              {o.productId && <span className="small muted"> · uit de catalogus</span>}
-            </span>
-            <RatingSelect value={o.rating ?? 7} label={`Cijfer voor ${o.text}`} onChange={(r) => saveOwned({ ...o, rating: r })} />
-            <button className="btn quiet" type="button" onClick={() => removeOwned(o.id)} aria-label={`Verwijder ${o.text}`}>
-              Weg
-            </button>
-          </li>
-        ))}
-      </ul>
+      {profile.owned.length === 0 ? (
+        <p className="small muted empty-hint">Nog niets. Zoek hieronder of typ het zelf in.</p>
+      ) : (
+        <ul className="list">
+          {profile.owned.map((o) => (
+            <motion.li key={o.id} className="row" {...softEnter}>
+              <span className="grow">
+                {o.text}
+                {o.productId && <span className="small muted"> · uit de catalogus</span>}
+              </span>
+              <RatingSelect value={o.rating ?? 7} label={`Cijfer voor ${o.text}`} onChange={(r) => saveOwned({ ...o, rating: r })} />
+              <motion.button className="btn quiet" type="button" whileTap={tap} transition={tapTransition} onClick={() => removeOwned(o.id)} aria-label={`Verwijder ${o.text}`}>
+                Weg
+              </motion.button>
+            </motion.li>
+          ))}
+        </ul>
+      )}
       <form
         className="add-form"
         onSubmit={(e) => {
@@ -207,22 +247,26 @@ function OwnedList({ profile, addOwned, saveOwned, removeOwned, search }: Props)
         {shownPicks.length > 0 && (
           <ul className="picks" aria-label="Uit de catalogus">
             {shownPicks.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => add(p.title, p.id)}>
+              <motion.li key={p.id} {...softEnter}>
+                <motion.button type="button" whileTap={tap} transition={tapTransition} onClick={() => add(p.title, p.id)}>
                   <img src={p.image} alt="" width={40} height={40} loading="lazy" />
                   <span className="clip small">
                     {p.title} <span className="muted">· {price(p.priceCents)}</span>
                   </span>
-                </button>
-              </li>
+                </motion.button>
+              </motion.li>
             ))}
           </ul>
         )}
         <div className="row">
-          <button className="btn primary" type="submit" disabled={!text.trim()}>
+          <motion.button className="btn primary" type="submit" whileTap={tap} transition={tapTransition} disabled={!text.trim()}>
             Toevoegen als tekst
-          </button>
-          {searching && <span className="small muted">Zoeken…</span>}
+          </motion.button>
+          {searching && (
+            <span className="small muted searching" role="status">
+              Zoeken…
+            </span>
+          )}
         </div>
       </form>
     </div>
@@ -237,12 +281,12 @@ function Backup({ exportBackup, importBackup }: Props) {
       <h2>Backup</h2>
       <p className="small muted">Een los bestand met al je gegevens, als extra zekerheid.</p>
       <div className="backup">
-        <button className="btn" type="button" onClick={exportBackup}>
+        <motion.button className="btn" type="button" whileTap={tap} transition={tapTransition} onClick={exportBackup}>
           Backup opslaan
-        </button>
-        <button className="btn" type="button" onClick={() => file.current?.click()}>
+        </motion.button>
+        <motion.button className="btn" type="button" whileTap={tap} transition={tapTransition} onClick={() => file.current?.click()}>
           Backup terugzetten
-        </button>
+        </motion.button>
         <input
           ref={file}
           type="file"
