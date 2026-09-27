@@ -3,11 +3,28 @@ import { EngineClient, type Status } from './engine/client';
 import type { ProfileData, SuggestedProduct } from './engine/protocol';
 import type { Filters, Interest, Owned } from './engine/types';
 import { openStore, type Store } from './store/db';
-import { downloadBackup, parseBackup, toBackup } from './store/backup';
+import { downloadBackup, mergeProfiles, parseBackup, toBackup } from './store/backup';
 import { Loading } from './ui/Loading';
 import { Suggestions } from './ui/Suggestions';
 import { Profile } from './ui/Profile';
 import { Rated } from './ui/Rated';
+import { useSync } from './sync/useSync';
+import { readLink, withoutAdd } from './sync/link';
+
+/** Handle a personal link (`#k=`) and a one-time add link (`#add=`) before the profile loads. */
+async function applyLink(store: Store) {
+  const { token, add } = readLink(location.hash);
+  if (add) {
+    try {
+      await store.mergeAll(parseBackup(add));
+      await store.putChangedAt(Date.now());
+    } catch {
+      // A broken link adds nothing.
+    }
+    history.replaceState(null, '', `${location.pathname}${location.search}${withoutAdd(location.hash)}`);
+  }
+  if (token && (await store.getSync())?.token !== token) await store.putSync({ token });
+}
 import './styles.css';
 
 type View = 'ideas' | 'profile' | 'rated';
@@ -32,6 +49,7 @@ export default function App() {
   useEffect(() => {
     openStore()
       .then(async (s) => {
+        await applyLink(s);
         const [p, f] = await Promise.all([s.load(), s.getFilters()]);
         setStore(s);
         setProfile(p);
@@ -66,7 +84,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
+  const applySynced = useCallback(
+    (data: ProfileData, f: Filters) => {
+      setProfile(data);
+      setFilters(f);
+      if (status.state === 'ready') refresh(data, f);
+    },
+    [refresh, status.state],
+  );
+  const sync = useSync({ store, profile, filters, apply: applySynced });
+
   const update = (next: ProfileData, keepHead = false) => {
+    sync.markChanged();
     setProfile(next);
     if (view === 'ideas' || keepHead) refresh(next, filters, keepHead ? queue[0] : undefined);
     else setQueue([]);
@@ -76,6 +105,7 @@ export default function App() {
     if (!store) return;
     const rating = { productId: product.id, score, at: Date.now() };
     await store.putRating(rating);
+    sync.markChanged();
     const next = { ...profile, ratings: [...profile.ratings.filter((r) => r.productId !== product.id), rating] };
     setProfile(next);
     const rest = queue.filter((q) => q.id !== product.id);
@@ -86,6 +116,7 @@ export default function App() {
   const changeFilters = async (f: Filters) => {
     setFilters(f);
     await store?.putFilters(f);
+    sync.markChanged();
     refresh(profile, f);
   };
 
@@ -120,15 +151,11 @@ export default function App() {
     importBackup: async (text: string) => {
       const b = parseBackup(text);
       await store?.mergeAll(b);
-      const merge = <T,>(old: T[], add: T[], key: (x: T) => string) => [...old.filter((x) => !add.some((a) => key(a) === key(x))), ...add];
-      update({
-        interests: merge(profile.interests, b.interests, (i) => i.id),
-        owned: merge(profile.owned, b.owned, (o) => o.id),
-        ratings: merge(profile.ratings, b.ratings, (r) => r.productId).sort((x, y) => x.at - y.at),
-      });
+      update(mergeProfiles(profile, b));
       return `${b.interests.length} interesses, ${b.owned.length} spullen en ${b.ratings.length} scores toegevoegd.`;
     },
     search: (q: string) => engine.search(q),
+    sync,
   };
 
   const changeRating = async (productId: string, score: number | null) => {

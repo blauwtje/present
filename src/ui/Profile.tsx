@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ProfileData } from '../engine/protocol';
 import type { Interest, Owned, Product } from '../engine/types';
 import { price } from './format';
+import { Sync } from './Sync';
+import type { useSync } from '../sync/useSync';
 
 interface Props {
   profile: ProfileData;
@@ -14,6 +16,7 @@ interface Props {
   exportBackup: () => void;
   importBackup: (text: string) => Promise<string>;
   search: (q: string) => Promise<Product[]>;
+  sync: ReturnType<typeof useSync>;
 }
 
 const weightWords = ['een beetje', 'wel', 'best veel', 'veel', 'heel veel'];
@@ -40,6 +43,7 @@ export function Profile(p: Props) {
       <div className="sections">
         <Interests {...p} />
         <OwnedList {...p} />
+        <Sync sync={p.sync} />
         <Backup {...p} />
       </div>
     </section>
@@ -231,7 +235,7 @@ function Backup({ exportBackup, importBackup }: Props) {
   return (
     <div>
       <h2>Backup</h2>
-      <p className="small muted">Alles staat alleen in deze browser. Bewaar een backup als je van telefoon wisselt.</p>
+      <p className="small muted">Een los bestand met al je gegevens, als extra zekerheid.</p>
       <div className="backup">
         <button className="btn" type="button" onClick={exportBackup}>
           Backup opslaan

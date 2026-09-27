@@ -6,6 +6,8 @@ export interface Backup extends ProfileData {
   version: 1;
   exportedAt: string;
   filters: Filters;
+  /** Time of the change this copy holds; set by sync. */
+  updatedAt?: number;
 }
 
 export function toBackup(data: ProfileData, filters: Filters): Backup {
@@ -40,7 +42,8 @@ export function parseBackup(text: string): Backup {
     (r): r is Rating => isObj(r) && typeof r.productId === 'string' && inRange(r.score) && typeof r.at === 'number',
   );
   const filters = isObj(raw.filters) ? (raw.filters as Filters) : {};
-  return { app: 'cadeau', version: 1, exportedAt: String(raw.exportedAt ?? ''), filters, interests, owned, ratings };
+  const updatedAt = typeof raw.updatedAt === 'number' ? raw.updatedAt : undefined;
+  return { app: 'cadeau', version: 1, exportedAt: String(raw.exportedAt ?? ''), filters, interests, owned, ratings, updatedAt };
 }
 
 export function downloadBackup(backup: Backup) {
@@ -51,4 +54,14 @@ export function downloadBackup(backup: Backup) {
   a.download = `cadeau-backup-${backup.exportedAt.slice(0, 10)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Union of two profiles; on the same id or product, `add` wins. */
+export function mergeProfiles(base: ProfileData, add: ProfileData): ProfileData {
+  const merge = <T>(old: T[], extra: T[], key: (x: T) => string) => [...old.filter((x) => !extra.some((a) => key(a) === key(x))), ...extra];
+  return {
+    interests: merge(base.interests, add.interests, (i) => i.id),
+    owned: merge(base.owned, add.owned, (o) => o.id),
+    ratings: merge(base.ratings, add.ratings, (r) => r.productId).sort((x, y) => x.at - y.at),
+  };
 }

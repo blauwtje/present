@@ -35,3 +35,11 @@ Korte lijst van keuzes die ik zelf heb gemaakt.
 - Letters: Young Serif (titels en prijs, als op een prijssticker) en Familjen Grotesk (tekst). Zelf gehost, geen externe fonts.
 - Scoreknoppen blijven onderin in beeld, boven het menu, binnen bereik van de duim. Menu onderin.
 - Desktop: label links, filters en "Hierna" rechts.
+
+## Synchroniseren
+- Via één geheime gist (`cadeau-profiel.json`) in je eigen GitHub-account. Per apparaat plak je 1 keer een classic token met alleen de scope `gist`. De sleutel staat in IndexedDB op dat apparaat en gaat alleen naar api.github.com.
+- Een apparaat zoekt de gist zelf op, dus alleen de sleutel is nodig.
+- Ophalen bij openen en als de app weer zichtbaar wordt; wegschrijven 2 seconden na een wijziging.
+- Nieuwste wint. Een apparaat dat voor het eerst koppelt, of als beide kanten tegelijk veranderden, voegt samen (niets gaat verloren; bij hetzelfde item wint dit apparaat).
+- Persoonlijke link `…/present/#k=<sleutel>`: 1 keer openen koppelt een apparaat. De sleutel staat in het #-deel van de URL, dat nooit naar een server gaat. Het manifest heeft geen `start_url`, zodat "Zet op beginscherm" de link met sleutel bewaart.
+- Toevoeg-link `…/present/#add=<base64 JSON>`: voegt 1 keer spullen, interesses of scores toe en haalt zichzelf daarna uit de URL.
