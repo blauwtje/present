@@ -111,8 +111,8 @@ export function recommend(catalog: Catalog, input: RecommendInput, cfg: Config =
   // Retrieval: top K per signal. Scores enter as one Rocchio query plus the latest high scores.
   const pool = new Set<number>();
   const retrieve = (q: Float32Array) => topK(similarities(catalog, q), cfg.topK, allowed).forEach((i) => pool.add(i));
+  // Owned items never seed retrieval: they only feed the near-duplicate check below.
   input.interests.forEach((s) => retrieve(s.vector));
-  ownedVectors.forEach(retrieve);
   if (input.rated.length) {
     const rocchio = new Float32Array(catalog.dim);
     input.rated.forEach((r, j) => {

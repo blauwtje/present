@@ -11,7 +11,7 @@ export interface CandidateInput {
   interests: (LabeledSim & { weight: number })[];
   /** Similarity to each scored product with its 1-5 score. */
   rated: (LabeledSim & { score: number })[];
-  /** Similarity to each owned item, with its 0..1 weight from the user's 1-10 rating. */
+  /** Similarity to each owned item. Never boosts the score (owned weight is 0); only used to drop near-duplicates. */
   owned: (LabeledSim & { weight?: number })[];
   rating: number;
   ratingCount: number;

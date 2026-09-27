@@ -58,17 +58,18 @@ describe('scoreCandidate', () => {
     expect(three.total).toBeCloseTo(neutral.total);
   });
 
-  it('rewards fit with owned items but drops near-duplicates', () => {
-    const fit = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'gitaar' }] })!;
-    expect(fit.total).toBeGreaterThan(scoreCandidate(base)!.total);
-    expect(fit.reason).toBe('owned');
-    expect(scoreCandidate({ ...base, owned: [{ sim: 0.95, label: 'gitaar' }] })).toBeNull();
+  it('never boosts the score from owned items, but drops near-duplicates', () => {
+    const withOwned = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'gitaar' }] })!;
+    expect(withOwned.total).toBeCloseTo(scoreCandidate(base)!.total);
+    expect(withOwned.reason).toBe('quality');
+    // Lowered so another product of the same kind (not just a near-identical one) counts as owned.
+    expect(scoreCandidate({ ...base, owned: [{ sim: 0.8, label: 'gitaar' }] })).toBeNull();
   });
 
-  it('weighs owned items by how much the user likes them', () => {
+  it('ignores how much the user likes an owned item, since owned never weighs into the total', () => {
     const loved = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'laptop', weight: 1 }] })!;
     const meh = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'horloge', weight: 0.5 }] })!;
-    expect(loved.total).toBeGreaterThan(meh.total);
+    expect(loved.total).toBeCloseTo(meh.total);
   });
 
   it('adds category affinity and quality', () => {

@@ -1,0 +1,11 @@
+name = "cadeau-prices"
+main = "index.ts"
+compatibility_date = "2026-09-27"
+
+# Origin allowed to call this Worker (set to your deployed app's URL).
+# Use "*" only while testing locally.
+[vars]
+ALLOWED_ORIGIN = "*"
+
+# SERPAPI_KEY is a secret, not a var: set it with
+#   npx wrangler secret put SERPAPI_KEY
