@@ -30,6 +30,16 @@ export function makeStore(db: IDBPDatabase<CadeauDB>) {
       return ((await db.get('settings', 'filters')) as Filters | undefined) ?? {};
     },
     putFilters: (f: Filters) => db.put('settings', f, 'filters'),
+    /** Add everything in `data`, overwriting entries with the same id, in one transaction. */
+    async mergeAll(data: ProfileData) {
+      const tx = db.transaction(['interests', 'owned', 'ratings'], 'readwrite');
+      await Promise.all([
+        ...data.interests.map((i) => tx.objectStore('interests').put(i)),
+        ...data.owned.map((o) => tx.objectStore('owned').put(o)),
+        ...data.ratings.map((r) => tx.objectStore('ratings').put(r, r.productId)),
+      ]);
+      await tx.done;
+    },
     /** Replace everything with `data` in one transaction. */
     async replaceAll(data: ProfileData & { filters?: Filters }) {
       const tx = db.transaction(['interests', 'owned', 'ratings', 'settings'], 'readwrite');

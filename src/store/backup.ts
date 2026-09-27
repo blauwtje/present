@@ -28,7 +28,14 @@ export function parseBackup(text: string): Backup {
   const interests = list('interests').filter(
     (i): i is Interest => isObj(i) && typeof i.id === 'string' && typeof i.text === 'string' && inRange(i.weight),
   );
-  const owned = list('owned').filter((o): o is Owned => isObj(o) && typeof o.id === 'string' && typeof o.text === 'string');
+  const owned = list('owned')
+    .filter((o): o is Owned => isObj(o) && typeof o.id === 'string' && typeof o.text === 'string')
+    .map((o) => {
+      const r = o.rating;
+      const { rating: _drop, ...rest } = o;
+      void _drop;
+      return typeof r === 'number' && r >= 1 && r <= 10 ? { ...rest, rating: Math.round(r) } : rest;
+    });
   const ratings = list('ratings').filter(
     (r): r is Rating => isObj(r) && typeof r.productId === 'string' && inRange(r.score) && typeof r.at === 'number',
   );

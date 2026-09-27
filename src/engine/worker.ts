@@ -67,7 +67,8 @@ async function handle(msg: Request) {
         });
       const ownedSignals = owned.map((o) => {
         const index = o.productId ? cat.byId.get(o.productId) : undefined;
-        return index != null ? { index, label: o.text } : { vector: vecOf.get(o.text)!, label: o.text };
+        const weight = (o.rating ?? 7) / 10;
+        return index != null ? { index, label: o.text, weight } : { vector: vecOf.get(o.text)!, label: o.text, weight };
       });
       const exclude = new Set(msg.exclude.map((id) => cat.byId.get(id)).filter((i): i is number => i != null));
       const out = recommend(cat, {

@@ -51,6 +51,8 @@ export interface Owned {
   text: string;
   /** Catalog product id when picked from the catalog. */
   productId?: string;
+  /** How much the user likes it, 1 to 10; missing counts as 7. */
+  rating?: number;
 }
 
 export interface Rating {
