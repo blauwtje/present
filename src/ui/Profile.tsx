@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import type { ProfileData } from '../engine/protocol';
 import type { Interest, Owned, Product } from '../engine/types';
 import { price } from './format';
+import { PriceSetup } from './PriceSetup';
 import { Sync } from './Sync';
 import type { useSync } from '../sync/useSync';
 
@@ -65,6 +66,7 @@ export function Profile(p: Props) {
         <Interests {...p} />
         <OwnedList {...p} />
         <Sync sync={p.sync} />
+        <PriceSetup />
         <Backup {...p} />
       </div>
     </section>
