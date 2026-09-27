@@ -32,7 +32,7 @@ function fakeCatalog() {
     'vec-01.bin': new Int8Array([-5, 6]),
   };
   return (url: string) => {
-    const name = url.split('/').pop()!;
+    const name = url.split('/').pop()!.split('?')[0];
     return Promise.resolve(name in files ? new Response(files[name]) : new Response('', { status: 404 }));
   };
 }
@@ -58,6 +58,6 @@ describe('loadCatalog', () => {
 
   it('fails on a missing file', async () => {
     const fetcher = fakeCatalog();
-    await expect(loadCatalog('x', undefined, (u) => (u.endsWith('vec-01.bin') ? Promise.resolve(new Response('', { status: 404 })) : fetcher(u)))).rejects.toThrow();
+    await expect(loadCatalog('x', undefined, (u) => (u.includes('vec-01.bin') ? Promise.resolve(new Response('', { status: 404 })) : fetcher(u)))).rejects.toThrow();
   });
 });

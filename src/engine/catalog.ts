@@ -1,7 +1,7 @@
 import type { Catalog, Manifest, MetaRow, Product } from './types';
 
 export type Progress = (loaded: number, total: number) => void;
-type Fetcher = (url: string) => Promise<Response>;
+type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 const IMAGE_BASE = 'https://m.media-amazon.com/images/I/';
 
@@ -34,7 +34,7 @@ async function readBody(res: Response, onChunk: (n: number) => void): Promise<Ui
 /** Load manifest, metadata and every vector shard from `base`, reporting bytes loaded. */
 export async function loadCatalog(base: string, onProgress?: Progress, fetcher: Fetcher = fetch): Promise<Catalog> {
   const root = base.endsWith('/') ? base : `${base}/`;
-  const manifestRes = await fetcher(`${root}manifest.json`);
+  const manifestRes = await fetcher(`${root}manifest.json`, { cache: 'no-cache' });
   if (!manifestRes.ok) throw new Error(`manifest: HTTP ${manifestRes.status}`);
   const manifest = (await manifestRes.json()) as Manifest;
   if (manifest.version !== 1) throw new Error(`unknown catalog version ${manifest.version}`);
@@ -45,6 +45,8 @@ export async function loadCatalog(base: string, onProgress?: Progress, fetcher: 
     onProgress?.(Math.min(loaded, total), total);
   };
   onProgress?.(0, total);
+  // The build time versions every data file, so a new catalog never mixes with cached shards.
+  const v = `?v=${encodeURIComponent(manifest.builtAt)}`;
 
   const vectors = new Int8Array(manifest.count * manifest.dim);
   const offsets: number[] = [];
@@ -56,9 +58,9 @@ export async function loadCatalog(base: string, onProgress?: Progress, fetcher: 
   if (rows !== manifest.count) throw new Error('shard counts do not add up');
 
   const [metaBytes] = await Promise.all([
-    fetcher(`${root}${manifest.meta.file}`).then((r) => readBody(r, tick)),
+    fetcher(`${root}${manifest.meta.file}${v}`).then((r) => readBody(r, tick)),
     ...manifest.shards.map((s, i) =>
-      fetcher(`${root}${s.file}`)
+      fetcher(`${root}${s.file}${v}`)
         .then((r) => readBody(r, tick))
         .then((bytes) => {
           if (bytes.byteLength !== s.count * manifest.dim) throw new Error(`${s.file}: wrong size`);
