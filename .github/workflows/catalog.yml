@@ -1,10 +1,14 @@
 name: Catalog
 
-# Builds the product catalog once and publishes it as release asset catalog-v1.
-# Deploys download that asset and never rebuild it.
+# Builds the product catalog and publishes it as release asset catalog-v1.
+# One job per category downloads, filters and embeds in parallel; a last job balances and packs.
+# Deploys download the release and never rebuild it.
 on:
   workflow_dispatch:
   push:
+    # Runs on feature branches when the catalog code changes; the release it publishes is shared,
+    # so merging to main does not rebuild it.
+    branches-ignore: [main]
     paths:
       - scripts/catalog/**
       - .github/workflows/catalog.yml
@@ -17,11 +21,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  category:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      matrix:
+        category:
+          - Toys_and_Games
+          - Video_Games
+          - Books
+          - Home_and_Kitchen
+          - Sports_and_Outdoors
+          - Electronics
+          - Arts_Crafts_and_Sewing
+          - Musical_Instruments
+          - Handmade_Products
+          - Beauty_and_Personal_Care
+          - Clothing_Shoes_and_Jewelry
+          - Office_Products
+          - Grocery_and_Gourmet_Food
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      CAT: ${{ matrix.category }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,12 +55,38 @@ jobs:
           cache: npm
       - run: pip install -r scripts/catalog/requirements.txt
       - run: npm ci
+      - name: Download and filter
+        run: python scripts/catalog/fetch_filter.py work "$CAT"
+      - name: Embed
+        run: node scripts/catalog/embed.mjs embed "work/$CAT.jsonl" "work/$CAT.bin"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cat-${{ matrix.category }}
+          path: |
+            work/${{ matrix.category }}.jsonl
+            work/${{ matrix.category }}.bin
+          retention-days: 3
+
+  pack:
+    needs: category
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Test packing
         run: node --test scripts/catalog/pack.test.mjs
-      - name: Download and filter
-        run: python scripts/catalog/fetch_filter.py work
-      - name: Embed and pack
-        run: node scripts/catalog/embed.mjs work/products.jsonl work/catalog
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cat-*
+          path: work/parts
+          merge-multiple: true
+      - name: Balance and pack
+        run: node scripts/catalog/embed.mjs pack work/parts work/catalog 60000
       - name: Check size and count
         run: |
           node -e "
