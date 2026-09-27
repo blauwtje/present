@@ -4,6 +4,7 @@ import type { Status } from '../engine/client';
 import type { ProfileData, SuggestedProduct } from '../engine/protocol';
 import type { Filters } from '../engine/types';
 import { categoryName } from '../engine/reason';
+import { Prices } from './Prices';
 import { USD_TO_EUR, categoryHueIndex, price } from './format';
 import { ScoreRow } from './ScoreRow';
 
@@ -154,8 +155,7 @@ export function Suggestions({ queue, thinking, error, status, profile, filters, 
                   );
                 })()}
               </p>
-              {/* Task 5's "Vergelijk prijzen" block lands here, below the price/reason and above the link. */}
-              <div className="tag-prices-slot" />
+              <Prices key={head.id} productId={head.id} query={head.title} onGoProfile={onGoProfile} />
               <p className="small">
                 <a className="btn quiet" href={`https://www.amazon.com/dp/${head.id}`} target="_blank" rel="noreferrer">
                   Bekijk bij Amazon

@@ -1195,9 +1195,72 @@ input[type='search'] {
   z-index: 1;
 }
 
-/* Reserved for Task 5's "Vergelijk prijzen" block; empty today so it takes no visible space. */
-.tag-prices-slot:empty {
-  display: none;
+/* Live Dutch shop prices: real totals, so they read as firm figures next to the approximate catalog price. */
+.prices {
+  margin: 16px 0 12px;
+}
+
+.prices-open {
+  width: 100%;
+}
+
+.prices-status {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.prices-list h3 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.prices-list ol {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  border-top: 1px solid var(--hair);
+}
+
+.prices-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.prices-shop {
+  font-weight: 600;
+  color: var(--ink);
+  min-height: 24px;
+}
+
+.prices-parts {
+  grid-column: 1;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+.prices-total {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The cheapest shop carries the positive score colour: the one row to act on. */
+.prices-list li[data-best] {
+  margin-inline: -10px;
+  padding-inline: 10px;
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--ribbon) 10%, transparent);
+  border-bottom-color: transparent;
+}
+
+.prices-list li[data-best] .prices-total {
+  color: var(--ribbon);
 }
 
 @media (prefers-reduced-motion: reduce) {
