@@ -1,0 +1,61 @@
+name: Catalog
+
+# Builds the product catalog once and publishes it as release asset catalog-v1.
+# Deploys download that asset and never rebuild it.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/catalog/**
+      - .github/workflows/catalog.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: pip install -r scripts/catalog/requirements.txt
+      - run: npm ci
+      - name: Test packing
+        run: node --test scripts/catalog/pack.test.mjs
+      - name: Download and filter
+        run: python scripts/catalog/fetch_filter.py work
+      - name: Embed and pack
+        run: node scripts/catalog/embed.mjs work/products.jsonl work/catalog
+      - name: Check size and count
+        run: |
+          node -e "
+            const m = require('./work/catalog/manifest.json');
+            console.log('count', m.count, 'bytes', m.totalBytes, 'MB', (m.totalBytes / 1e6).toFixed(2));
+            if (m.count < 50000) { console.error('catalog too small'); process.exit(1); }
+          "
+          tar -C work -czf catalog.tar.gz catalog
+          ls -l catalog.tar.gz
+          echo "### Catalog" >> "$GITHUB_STEP_SUMMARY"
+          node -e "const m=require('./work/catalog/manifest.json');console.log('count '+m.count+', download '+(m.totalBytes/1e6).toFixed(2)+' MB')" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view catalog-v1 >/dev/null 2>&1; then
+            gh release upload catalog-v1 catalog.tar.gz --clobber
+          else
+            gh release create catalog-v1 catalog.tar.gz --target "$GITHUB_SHA" --title "Catalog v1" --notes "Product catalog for the gift app."
+          fi
