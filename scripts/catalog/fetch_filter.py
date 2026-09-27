@@ -8,8 +8,9 @@ import math
 import os
 import re
 import sys
+import time
 
-import duckdb
+import pyarrow.parquet as pq
 import requests
 
 REPO = "McAuley-Lab/Amazon-Reviews-2023"
@@ -50,26 +51,79 @@ def source_for(cat):
     return "json", [f"{RESOLVE}/main/raw/meta_categories/meta_{cat}.jsonl"]
 
 
-def read_candidates(con, cat):
+NEEDED = ["parent_asin", "title", "main_category", "categories", "images", "price", "average_rating", "rating_number"]
+PRICE_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def to_float(v):
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    m = PRICE_RE.search(str(v).replace(",", ""))
+    return float(m.group(0)) if m else None
+
+
+def keep(rec):
+    """Cheap filter on rating, count and price before anything heavier is read."""
+    count = to_float(rec.get("rating_number"))
+    avg = to_float(rec.get("average_rating"))
+    price = to_float(rec.get("price"))
+    if count is None or count < MIN_RATINGS or avg is None or avg < MIN_AVG or not price or price <= 0:
+        return False
+    rec["rating_number"], rec["average_rating"], rec["price"] = int(count), avg, price
+    return True
+
+
+def download(url, dest):
+    """Download a whole file; reading remote parquet in small ranges is far too slow."""
+    t0 = time.time()
+    with requests.get(url, headers=HEADERS, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with open(dest, "wb") as fh:
+            for chunk in r.iter_content(chunk_size=8 << 20):
+                fh.write(chunk)
+    size = os.path.getsize(dest)
+    print(f"  downloaded {size / 1e6:.0f} MB in {time.time() - t0:.0f}s", flush=True)
+
+
+def iter_parquet(path):
+    pf = pq.ParquetFile(path)
+    names = set(pf.schema_arrow.names)
+    cols = [c for c in NEEDED if c in names]
+    cheap = [c for c in ("rating_number", "average_rating", "price") if c in names]
+    for i in range(pf.num_row_groups):
+        light = pf.read_row_group(i, columns=cheap).to_pylist()
+        idx = [j for j, rec in enumerate(light) if keep(rec)]
+        if not idx:
+            continue
+        full = pf.read_row_group(i, columns=cols).take(idx).to_pylist()
+        for rec, cheap_rec in zip(full, (light[j] for j in idx)):
+            rec.update(cheap_rec)
+            yield rec
+
+
+def iter_jsonl(path):
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if keep(rec):
+                yield rec
+
+
+def read_candidates(cat, tmp_dir):
     kind, urls = source_for(cat)
     print(f"{cat}: {kind} x{len(urls)}", flush=True)
-    url_list = "[" + ",".join(f"'{u}'" for u in urls) + "]"
-    if kind == "parquet":
-        src = f"read_parquet({url_list}, union_by_name=true)"
-    else:
-        src = f"read_json({url_list}, format='newline_delimited', ignore_errors=true, maximum_object_size=67108864)"
-    sql = f"""
-        SELECT parent_asin, title, main_category, categories, images,
-               TRY_CAST(price AS DOUBLE) AS price,
-               TRY_CAST(average_rating AS DOUBLE) AS average_rating,
-               TRY_CAST(rating_number AS BIGINT) AS rating_number
-        FROM {src}
-        WHERE TRY_CAST(rating_number AS BIGINT) >= {MIN_RATINGS}
-          AND TRY_CAST(average_rating AS DOUBLE) >= {MIN_AVG}
-          AND TRY_CAST(price AS DOUBLE) > 0
-          AND title IS NOT NULL AND length(title) > 0
-    """
-    return con.execute(sql).fetchall(), [d[0] for d in con.description]
+    for n, url in enumerate(urls):
+        dest = os.path.join(tmp_dir, f"{cat}-{n}.{kind}")
+        download(url, dest)
+        try:
+            yield from (iter_parquet(dest) if kind == "parquet" else iter_jsonl(dest))
+        finally:
+            os.remove(dest)
 
 
 def image_urls(images):
@@ -100,8 +154,8 @@ def image_key(images):
 
 
 def to_row(cat, rec):
-    key = image_key(rec["images"])
-    if not key:
+    key = image_key(rec.get("images"))
+    if not key or not rec.get("title"):
         return None
     cats = [c for c in (rec["categories"] or []) if c]
     path = " > ".join(cats) if cats else (rec["main_category"] or cat.replace("_", " "))
@@ -115,7 +169,7 @@ def to_row(cat, rec):
         "price_cents": int(round(rec["price"] * 100)),
         "image_key": key,
         "rating_x10": int(round(rec["average_rating"] * 10)),
-        "rating_count": int(rec["rating_number"]),
+        "rating_count": rec["rating_number"],
         "text": f"{title}. {' / '.join(tail)}",
     }
 
@@ -145,26 +199,22 @@ def balance(per_cat, target):
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "work"
     os.makedirs(out_dir, exist_ok=True)
-    con = duckdb.connect()
-    con.execute("INSTALL httpfs; LOAD httpfs;")
-    con.execute("SET http_retries = 8; SET http_timeout = 120000;")
-    if os.environ.get("HF_TOKEN"):
-        con.execute(f"CREATE SECRET hf (TYPE HUGGINGFACE, TOKEN '{os.environ['HF_TOKEN']}')")
+    tmp_dir = os.path.join(out_dir, "tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
     per_cat = {}
     seen = set()
     for cat in CATEGORIES:
-        rows, cols = read_candidates(con, cat)
+        t0 = time.time()
         kept = []
-        for values in rows:
-            rec = dict(zip(cols, values))
-            if not rec["parent_asin"] or rec["parent_asin"] in seen:
+        for rec in read_candidates(cat, tmp_dir):
+            if not rec.get("parent_asin") or rec["parent_asin"] in seen:
                 continue
             row = to_row(cat, rec)
             if row:
                 seen.add(row["asin"])
                 kept.append(row)
         per_cat[cat] = kept
-        print(f"{cat}: {len(kept)} candidates", flush=True)
+        print(f"{cat}: {len(kept)} candidates in {time.time() - t0:.0f}s", flush=True)
     rows = balance(per_cat, TARGET)
     counts = {c: sum(1 for r in rows if r["top_category"] == c) for c in CATEGORIES}
     print("selected per category:", counts, flush=True)

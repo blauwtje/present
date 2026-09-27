@@ -5,6 +5,9 @@ name: Catalog
 on:
   workflow_dispatch:
   push:
+    # Runs on feature branches when the catalog code changes; the release it publishes is shared,
+    # so merging to main does not rebuild it.
+    branches-ignore: [main]
     paths:
       - scripts/catalog/**
       - .github/workflows/catalog.yml
