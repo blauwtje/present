@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { useSync } from '../sync/useSync';
+import { personalLink, tokenFromInput } from '../sync/link';
 
 const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=Cadeau-app';
 
@@ -9,7 +10,20 @@ function time(t?: number) {
 
 export function Sync({ sync }: { sync: ReturnType<typeof useSync> }) {
   const [token, setToken] = useState('');
+  const [copied, setCopied] = useState(false);
   const { status } = sync;
+
+  const share = async () => {
+    const t = await sync.token();
+    if (!t) return;
+    const url = personalLink(`${location.origin}${location.pathname}`, t);
+    if (navigator.share) {
+      await navigator.share({ title: 'Cadeau', url }).catch(() => undefined);
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    }
+  };
 
   if (status.state === 'off') {
     return (
@@ -31,15 +45,16 @@ export function Sync({ sync }: { sync: ReturnType<typeof useSync> }) {
           className="add-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (token.trim()) void sync.connect(token).then(() => setToken(''));
+            const t = tokenFromInput(token);
+            if (t) void sync.connect(t).then(() => setToken(''));
           }}
         >
           <label className="field">
-            <span>GitHub-sleutel</span>
+            <span>GitHub-sleutel of je persoonlijke link</span>
             <input type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_…" />
           </label>
           <div>
-            <button className="btn primary" type="submit" disabled={!token.trim()}>
+            <button className="btn primary" type="submit" disabled={!tokenFromInput(token)}>
               Koppelen
             </button>
           </div>
@@ -63,10 +78,16 @@ export function Sync({ sync }: { sync: ReturnType<typeof useSync> }) {
         <button className="btn" type="button" onClick={() => void sync.syncNow()} disabled={status.state === 'busy'}>
           Nu bijwerken
         </button>
+        <button className="btn primary" type="button" onClick={() => void share()}>
+          Deel met ander apparaat
+        </button>
         <button className="btn quiet" type="button" onClick={() => void sync.disconnect()}>
           Ontkoppelen
         </button>
       </div>
+      <p className="small muted">
+        {copied ? 'Link gekopieerd. ' : ''}Open je persoonlijke link 1 keer op je andere apparaten, dan zijn ze gekoppeld. De link bevat je sleutel: stuur hem alleen naar jezelf.
+      </p>
     </div>
   );
 }

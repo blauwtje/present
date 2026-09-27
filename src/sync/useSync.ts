@@ -117,5 +117,7 @@ export function useSync({ store, profile, filters, apply }: Options) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [store, sync]);
 
-  return { status, connect, disconnect, syncNow: sync, markChanged };
+  const token = useCallback(async () => (await store?.getSync())?.token, [store]);
+
+  return { status, connect, disconnect, syncNow: sync, markChanged, token };
 }

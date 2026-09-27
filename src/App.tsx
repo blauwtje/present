@@ -9,6 +9,22 @@ import { Suggestions } from './ui/Suggestions';
 import { Profile } from './ui/Profile';
 import { Rated } from './ui/Rated';
 import { useSync } from './sync/useSync';
+import { readLink, withoutAdd } from './sync/link';
+
+/** Handle a personal link (`#k=`) and a one-time add link (`#add=`) before the profile loads. */
+async function applyLink(store: Store) {
+  const { token, add } = readLink(location.hash);
+  if (add) {
+    try {
+      await store.mergeAll(parseBackup(add));
+      await store.putChangedAt(Date.now());
+    } catch {
+      // A broken link adds nothing.
+    }
+    history.replaceState(null, '', `${location.pathname}${location.search}${withoutAdd(location.hash)}`);
+  }
+  if (token && (await store.getSync())?.token !== token) await store.putSync({ token });
+}
 import './styles.css';
 
 type View = 'ideas' | 'profile' | 'rated';
@@ -33,6 +49,7 @@ export default function App() {
   useEffect(() => {
     openStore()
       .then(async (s) => {
+        await applyLink(s);
         const [p, f] = await Promise.all([s.load(), s.getFilters()]);
         setStore(s);
         setProfile(p);
