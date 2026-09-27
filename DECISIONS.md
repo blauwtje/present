@@ -25,7 +25,8 @@ Korte lijst van keuzes die ik zelf heb gemaakt.
 
 ## App
 - Het taalmodel komt van de Hugging Face CDN en wordt in de browser bewaard (transformers.js-cache en service worker). De catalogus pas na de eerste keer uit de cache; `manifest.json` wordt altijd opnieuw gecheckt, en de bouwdatum zit in de URL van elk databestand.
-- IndexedDB via `idb`. Backup is een JSON-bestand met interesses, spullen, scores en filters.
+- IndexedDB via `idb`. Backup is een JSON-bestand met interesses, spullen, scores en filters. Terugzetten voegt toe en overschrijft alleen dezelfde id; het wist niets.
+- "Heb ik al" heeft een cijfer 1 tot 10 (zonder cijfer telt 7). Het gewicht van dat signaal is cijfer/10.
 - Deploy via de officiële Pages-workflow (`actions/deploy-pages`).
 
 ## Design

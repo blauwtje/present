@@ -65,6 +65,12 @@ describe('scoreCandidate', () => {
     expect(scoreCandidate({ ...base, owned: [{ sim: 0.95, label: 'gitaar' }] })).toBeNull();
   });
 
+  it('weighs owned items by how much the user likes them', () => {
+    const loved = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'laptop', weight: 1 }] })!;
+    const meh = scoreCandidate({ ...base, owned: [{ sim: 0.6, label: 'horloge', weight: 0.5 }] })!;
+    expect(loved.total).toBeGreaterThan(meh.total);
+  });
+
   it('adds category affinity and quality', () => {
     const plain = scoreCandidate(base)!;
     expect(scoreCandidate({ ...base, categoryAffinity: 0.5 })!.total).toBeGreaterThan(plain.total);

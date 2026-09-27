@@ -103,8 +103,12 @@ export default function App() {
       await store?.deleteInterest(id);
       update({ ...profile, interests: profile.interests.filter((x) => x.id !== id) });
     },
-    addOwned: async (text: string, productId?: string) => {
-      const o: Owned = { id: newId(), text, ...(productId ? { productId } : {}) };
+    saveOwned: async (o: Owned) => {
+      await store?.putOwned(o);
+      update({ ...profile, owned: profile.owned.map((x) => (x.id === o.id ? o : x)) });
+    },
+    addOwned: async (text: string, rating: number, productId?: string) => {
+      const o: Owned = { id: newId(), text, rating, ...(productId ? { productId } : {}) };
       await store?.putOwned(o);
       update({ ...profile, owned: [...profile.owned, o] });
     },
@@ -115,10 +119,14 @@ export default function App() {
     exportBackup: () => downloadBackup(toBackup(profile, filters)),
     importBackup: async (text: string) => {
       const b = parseBackup(text);
-      await store?.replaceAll(b);
-      setFilters(b.filters);
-      update({ interests: b.interests, owned: b.owned, ratings: b.ratings });
-      return `${b.interests.length} interesses, ${b.owned.length} spullen en ${b.ratings.length} scores geladen.`;
+      await store?.mergeAll(b);
+      const merge = <T,>(old: T[], add: T[], key: (x: T) => string) => [...old.filter((x) => !add.some((a) => key(a) === key(x))), ...add];
+      update({
+        interests: merge(profile.interests, b.interests, (i) => i.id),
+        owned: merge(profile.owned, b.owned, (o) => o.id),
+        ratings: merge(profile.ratings, b.ratings, (r) => r.productId).sort((x, y) => x.at - y.at),
+      });
+      return `${b.interests.length} interesses, ${b.owned.length} spullen en ${b.ratings.length} scores toegevoegd.`;
     },
     search: (q: string) => engine.search(q),
   };

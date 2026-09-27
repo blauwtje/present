@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ProfileData } from '../engine/protocol';
-import type { Interest, Product } from '../engine/types';
+import type { Interest, Owned, Product } from '../engine/types';
 import { price } from './format';
 
 interface Props {
@@ -8,7 +8,8 @@ interface Props {
   saveInterest: (i: Interest) => Promise<void>;
   addInterest: (text: string, weight: number) => Promise<void>;
   removeInterest: (id: string) => Promise<void>;
-  addOwned: (text: string, productId?: string) => Promise<void>;
+  addOwned: (text: string, rating: number, productId?: string) => Promise<void>;
+  saveOwned: (o: Owned) => Promise<void>;
   removeOwned: (id: string) => Promise<void>;
   exportBackup: () => void;
   importBackup: (text: string) => Promise<string>;
@@ -124,8 +125,24 @@ function Interests({ profile, saveInterest, addInterest, removeInterest }: Props
   );
 }
 
-function OwnedList({ profile, addOwned, removeOwned, search }: Props) {
+function RatingSelect({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <label className="rating-select">
+      <span className="visually-hidden">{label}</span>
+      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        {Array.from({ length: 10 }, (_, i) => 10 - i).map((n) => (
+          <option key={n} value={n}>
+            {n}/10
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function OwnedList({ profile, addOwned, saveOwned, removeOwned, search }: Props) {
   const [text, setText] = useState('');
+  const [rating, setRating] = useState(8);
   const [picks, setPicks] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
   const seq = useRef(0);
@@ -145,7 +162,7 @@ function OwnedList({ profile, addOwned, removeOwned, search }: Props) {
   }, [text, search]);
 
   const add = async (label: string, productId?: string) => {
-    await addOwned(label, productId);
+    await addOwned(label, rating, productId);
     setText('');
     setPicks([]);
   };
@@ -154,7 +171,7 @@ function OwnedList({ profile, addOwned, removeOwned, search }: Props) {
   return (
     <div>
       <h2>Heb ik al</h2>
-      <p className="small muted">Dit krijg je niet nog eens. Wel dingen die erbij passen.</p>
+      <p className="small muted">Dit krijg je niet nog eens. Wel dingen die erbij passen. Het cijfer zegt hoe blij je ermee bent: hoe hoger, hoe meer het meetelt.</p>
       <ul className="list">
         {profile.owned.map((o) => (
           <li key={o.id} className="row">
@@ -162,6 +179,7 @@ function OwnedList({ profile, addOwned, removeOwned, search }: Props) {
               {o.text}
               {o.productId && <span className="small muted"> · uit de catalogus</span>}
             </span>
+            <RatingSelect value={o.rating ?? 7} label={`Cijfer voor ${o.text}`} onChange={(r) => saveOwned({ ...o, rating: r })} />
             <button className="btn quiet" type="button" onClick={() => removeOwned(o.id)} aria-label={`Verwijder ${o.text}`}>
               Weg
             </button>
@@ -175,10 +193,13 @@ function OwnedList({ profile, addOwned, removeOwned, search }: Props) {
           if (text.trim()) void add(text.trim());
         }}
       >
-        <label className="field">
-          <span>Iets dat je al hebt</span>
-          <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="bijv. Kindle, espressomachine" enterKeyHint="done" />
-        </label>
+        <div className="field">
+          <span id="owned-label">Iets dat je al hebt</span>
+          <span className="row">
+            <input type="search" aria-labelledby="owned-label" className="grow" value={text} onChange={(e) => setText(e.target.value)} placeholder="bijv. Kindle, espressomachine" enterKeyHint="done" />
+            <RatingSelect value={rating} label="Cijfer" onChange={setRating} />
+          </span>
+        </div>
         {shownPicks.length > 0 && (
           <ul className="picks" aria-label="Uit de catalogus">
             {shownPicks.map((p) => (

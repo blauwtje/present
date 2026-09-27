@@ -745,3 +745,13 @@ input[type='search'] {
   font-size: 1.375rem;
   margin-bottom: 4px;
 }
+
+.rating-select select {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  background: var(--tag);
+  font-family: var(--display);
+  color: var(--ribbon);
+}

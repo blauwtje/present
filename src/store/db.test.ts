@@ -47,6 +47,19 @@ describe('store', () => {
     expect(await b.getFilters()).toEqual({ minPriceCents: 1000 });
   });
 
+  it('merges a backup into existing data and keeps owned ratings', async () => {
+    const s = await fresh();
+    await s.putInterest({ id: 'mine', text: 'koken', weight: 4 });
+    const b = parseBackup(
+      JSON.stringify({ app: 'cadeau', version: 1, owned: [{ id: 'o1', text: 'laptop', rating: 10 }, { id: 'o2', text: 'x', rating: 99 }] }),
+    );
+    await s.mergeAll(b);
+    const data = await s.load();
+    expect(data.interests).toHaveLength(1);
+    expect(data.owned.find((o) => o.id === 'o1')?.rating).toBe(10);
+    expect(data.owned.find((o) => o.id === 'o2')?.rating).toBeUndefined();
+  });
+
   it('rejects files that are not a backup and drops bad rows', () => {
     expect(() => parseBackup('nope')).toThrow();
     expect(() => parseBackup('{"app":"x"}')).toThrow();

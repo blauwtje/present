@@ -11,8 +11,8 @@ export interface CandidateInput {
   interests: (LabeledSim & { weight: number })[];
   /** Similarity to each scored product with its 1-5 score. */
   rated: (LabeledSim & { score: number })[];
-  /** Similarity to each owned item. */
-  owned: LabeledSim[];
+  /** Similarity to each owned item, with its 0..1 weight from the user's 1-10 rating. */
+  owned: (LabeledSim & { weight?: number })[];
   rating: number;
   ratingCount: number;
   /** Category affinity, -1..1. */
@@ -92,7 +92,7 @@ export function scoreCandidate(input: CandidateInput, cfg: Config = defaults): S
   }
   const liked = likedDen ? likedNum / likedDen : 0;
 
-  const owned = best(input.owned, (o) => useful(o.sim));
+  const owned = best(input.owned, (o) => useful(o.sim) * (o.weight ?? 1));
 
   const parts: ScoreParts = {
     interest: interest.value,

@@ -18,6 +18,8 @@ export interface OwnedSignal {
   /** Catalog index when the item was picked from the catalog. */
   index?: number;
   label: string;
+  /** 0..1, from the user's 1-10 rating of the item. */
+  weight?: number;
 }
 
 export interface RecommendInput {
@@ -140,7 +142,7 @@ export function recommend(catalog: Catalog, input: RecommendInput, cfg: Config =
     const cand: CandidateInput = {
       interests: input.interests.map((s) => ({ sim: dotRow(catalog, i, s.vector), weight: s.weight, label: s.label })),
       rated: input.rated.map((r) => ({ sim: dotRows(catalog, i, r.index), score: r.score, label: r.label })),
-      owned: input.owned.map((o, j) => ({ sim: dotRow(catalog, i, ownedVectors[j]), label: o.label })),
+      owned: input.owned.map((o, j) => ({ sim: dotRow(catalog, i, ownedVectors[j]), label: o.label, weight: o.weight })),
       rating: row[6] / 10,
       ratingCount: row[7],
       categoryAffinity: affinity.get(category) ?? 0,
