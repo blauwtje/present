@@ -48,3 +48,11 @@ test('writeCatalog writes files and measures total bytes', () => {
 test('pack rejects mismatched vectors', () => {
   assert.throws(() => pack([product(0, 'Books')], new Int8Array(3), { dim: 4 }));
 });
+
+test('balance spreads the target and hands unused share on', async () => {
+  const { balance } = await import('./embed.mjs');
+  const q = balance(new Map([['a', Array(10)], ['b', Array(2)], ['c', Array(100)]]), 30);
+  assert.deepEqual(Object.fromEntries(q), { a: 10, b: 2, c: 18 });
+  const even = balance(new Map([['a', Array(50)], ['b', Array(50)]]), 30);
+  assert.deepEqual(Object.fromEntries(even), { a: 15, b: 15 });
+});

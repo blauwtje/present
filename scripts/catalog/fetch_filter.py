@@ -1,10 +1,9 @@
-"""Download Amazon Reviews 2023 metadata, filter it and write a balanced product table.
+"""Download Amazon Reviews 2023 metadata for one category and filter it.
 
-Output: work/products.jsonl, one JSON object per line with keys
+Output: one JSON object per line with keys
 asin, title, top_category, path, price_cents, image_key, rating_x10, rating_count, text
 """
 import json
-import math
 import os
 import re
 import sys
@@ -22,7 +21,7 @@ CATEGORIES = [
     "Beauty_and_Personal_Care", "Clothing_Shoes_and_Jewelry", "Office_Products",
     "Grocery_and_Gourmet_Food",
 ]
-TARGET = int(os.environ.get("CATALOG_TARGET", "60000"))
+PER_CATEGORY = int(os.environ.get("CANDIDATES_PER_CATEGORY", "8000"))
 MIN_RATINGS = 50
 MIN_AVG = 4.0
 IMAGE_RE = re.compile(r"^https://m\.media-amazon\.com/images/I/([A-Za-z0-9+%_-]+)\.")
@@ -174,53 +173,31 @@ def to_row(cat, rec):
     }
 
 
-def balance(per_cat, target):
-    """Give every category an equal share; unused share goes to the others in order."""
-    for rows in per_cat.values():
-        rows.sort(key=lambda r: r["rating_count"], reverse=True)
-    quota = {c: 0 for c in per_cat}
-    left = target
-    open_cats = [c for c in per_cat if per_cat[c]]
-    while left > 0 and open_cats:
-        share = max(1, math.ceil(left / len(open_cats)))
-        nxt = []
-        for c in open_cats:
-            take = min(share, len(per_cat[c]) - quota[c], left)
-            quota[c] += take
-            left -= take
-            if quota[c] < len(per_cat[c]):
-                nxt.append(c)
-            if left == 0:
-                break
-        open_cats = nxt
-    return [r for c in per_cat for r in per_cat[c][: quota[c]]]
-
-
 def main():
-    out_dir = sys.argv[1] if len(sys.argv) > 1 else "work"
+    """Usage: fetch_filter.py <out dir> <category>
+
+    Writes <out dir>/<category>.jsonl: the category's filtered products, most reviewed first,
+    at most CANDIDATES_PER_CATEGORY of them. embed.mjs balances the categories when it packs.
+    """
+    out_dir, cat = sys.argv[1], sys.argv[2]
+    if cat not in CATEGORIES:
+        sys.exit(f"unknown category {cat}")
     os.makedirs(out_dir, exist_ok=True)
     tmp_dir = os.path.join(out_dir, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    per_cat = {}
-    seen = set()
-    for cat in CATEGORIES:
-        t0 = time.time()
-        kept = []
-        for rec in read_candidates(cat, tmp_dir):
-            if not rec.get("parent_asin") or rec["parent_asin"] in seen:
-                continue
-            row = to_row(cat, rec)
-            if row:
-                seen.add(row["asin"])
-                kept.append(row)
-        per_cat[cat] = kept
-        print(f"{cat}: {len(kept)} candidates in {time.time() - t0:.0f}s", flush=True)
-    rows = balance(per_cat, TARGET)
-    counts = {c: sum(1 for r in rows if r["top_category"] == c) for c in CATEGORIES}
-    print("selected per category:", counts, flush=True)
-    print(f"selected total: {len(rows)}", flush=True)
-    with open(os.path.join(out_dir, "products.jsonl"), "w", encoding="utf-8") as fh:
-        for row in rows:
+    t0 = time.time()
+    rows = {}
+    for rec in read_candidates(cat, tmp_dir):
+        asin = rec.get("parent_asin")
+        if not asin or asin in rows:
+            continue
+        row = to_row(cat, rec)
+        if row:
+            rows[asin] = row
+    kept = sorted(rows.values(), key=lambda r: r["rating_count"], reverse=True)[:PER_CATEGORY]
+    print(f"{cat}: {len(rows)} pass the filter, kept {len(kept)} in {time.time() - t0:.0f}s", flush=True)
+    with open(os.path.join(out_dir, f"{cat}.jsonl"), "w", encoding="utf-8") as fh:
+        for row in kept:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 

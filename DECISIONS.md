@@ -5,6 +5,7 @@ Korte lijst van keuzes die ik zelf heb gemaakt.
 ## Catalogus
 - Per categorie de producten met de meeste reviews, na het filter (prijs, foto, minstens 50 reviews, minstens 4,0 sterren). Doel 60.000, gelijk verdeeld; heeft een categorie te weinig, dan vullen de andere aan.
 - Tekst voor de vector: titel plus de laatste twee stappen van het categoriepad.
+- De catalogus-workflow draait 13 jobs tegelijk, één per categorie (downloaden, filteren, vectoren maken, max. 8.000 per categorie). Een laatste job verdeelt eerlijk tot 60.000 en pakt alles in.
 - Filteren: elk parquet-bestand van Hugging Face wordt eerst helemaal gedownload en dan lokaal gelezen met pyarrow (op afstand lezen was te traag). Zijn er geen parquet-bestanden, dan leest het script de jsonl-bestanden.
 - Vectoren maken gebeurt met transformers.js in Node, met exact hetzelfde gecomprimeerde (q8) model als in de browser: `Xenova/paraphrase-multilingual-MiniLM-L12-v2`.
 - Opslag: int8 (`round(v * 127)`), 5.000 producten per bestand, metadata als één JSON-lijst. Afbeelding als korte sleutel in plaats van hele URL.

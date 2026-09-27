@@ -1,6 +1,7 @@
-// Embed work/products.jsonl and pack it into the catalog v1 format.
-// Usage: node scripts/catalog/embed.mjs <products.jsonl> <out dir>
-import { createReadStream, mkdirSync, writeFileSync, statSync } from 'node:fs';
+// Embed product files and pack them into the catalog v1 format.
+// Usage: node scripts/catalog/embed.mjs embed <cat.jsonl> <cat.bin>
+//        node scripts/catalog/embed.mjs pack <dir with jsonl+bin> <out dir> [target]
+import { createReadStream, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -82,6 +83,30 @@ export function writeCatalog(outDir, { manifest, meta, shards }) {
   return manifest;
 }
 
+/**
+ * Pick `target` products spread evenly over categories. Each list is already sorted best first;
+ * a category with too few products hands its unused share to the others. Returns chosen positions.
+ */
+export function balance(perCategory, target) {
+  const cats = [...perCategory.keys()];
+  const quota = new Map(cats.map((c) => [c, 0]));
+  let left = target;
+  let open = cats.filter((c) => perCategory.get(c).length > 0);
+  while (left > 0 && open.length) {
+    const share = Math.max(1, Math.ceil(left / open.length));
+    const next = [];
+    for (const c of open) {
+      if (left === 0) break;
+      const take = Math.min(share, perCategory.get(c).length - quota.get(c), left);
+      quota.set(c, quota.get(c) + take);
+      left -= take;
+      if (quota.get(c) < perCategory.get(c).length) next.push(c);
+    }
+    open = next;
+  }
+  return quota;
+}
+
 async function readProducts(file) {
   const rows = [];
   const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
@@ -89,11 +114,11 @@ async function readProducts(file) {
   return rows;
 }
 
-async function main() {
-  const [input = 'work/products.jsonl', outDir = 'work/catalog'] = process.argv.slice(2);
+/** Embed one category file into `<name>.bin`, one int8 row per product in file order. */
+async function embedFile(input, output) {
   const { pipeline } = await import('@huggingface/transformers');
   const products = await readProducts(input);
-  console.log(`products: ${products.length}`);
+  console.log(`${input}: ${products.length} products`);
   const extractor = await pipeline('feature-extraction', MODEL, { dtype: DTYPE });
   const vectors = new Int8Array(products.length * DIM);
   const batch = 64;
@@ -103,10 +128,43 @@ async function main() {
     const out = await extractor(texts, { pooling: 'mean', normalize: true });
     const data = out.data;
     for (let j = 0; j < texts.length; j++) quantize(data.subarray(j * DIM, (j + 1) * DIM), vectors, (i + j) * DIM);
-    if ((i / batch) % 50 === 0) console.log(`embedded ${i + texts.length}/${products.length} in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    if ((i / batch) % 25 === 0) console.log(`embedded ${i + texts.length}/${products.length} in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
-  const manifest = writeCatalog(outDir, pack(products, vectors));
+  writeFileSync(output, Buffer.from(vectors.buffer));
+}
+
+/** Merge every `<cat>.jsonl` + `<cat>.bin` in `dir`, balance to `target` and write the catalog. */
+async function packDir(dir, outDir, target) {
+  const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl')).sort();
+  const perCategory = new Map();
+  const seen = new Set();
+  for (const f of files) {
+    const products = await readProducts(join(dir, f));
+    const buf = readFileSync(join(dir, f.replace(/\.jsonl$/, '.bin')));
+    const vec = new Int8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    if (vec.length !== products.length * DIM) throw new Error(`${f}: vectors do not match products`);
+    const rows = [];
+    products.forEach((p, i) => {
+      if (seen.has(p.asin)) return;
+      seen.add(p.asin);
+      rows.push({ p, v: vec.subarray(i * DIM, (i + 1) * DIM) });
+    });
+    perCategory.set(f.replace(/\.jsonl$/, ''), rows);
+  }
+  const quota = balance(perCategory, target);
+  const chosen = [...perCategory].flatMap(([c, rows]) => rows.slice(0, quota.get(c)));
+  console.log('selected per category:', Object.fromEntries(quota));
+  const vectors = new Int8Array(chosen.length * DIM);
+  chosen.forEach((r, i) => vectors.set(r.v, i * DIM));
+  const manifest = writeCatalog(outDir, pack(chosen.map((r) => r.p), vectors));
   console.log(`catalog: ${manifest.count} products, ${manifest.shards.length} shards, ${(manifest.totalBytes / 1e6).toFixed(2)} MB`);
+}
+
+async function main() {
+  const [cmd, a, b, target = '60000'] = process.argv.slice(2);
+  if (cmd === 'embed') await embedFile(a, b);
+  else if (cmd === 'pack') await packDir(a, b, Number(target));
+  else throw new Error('usage: embed.mjs embed <in.jsonl> <out.bin> | pack <dir> <outDir> [target]');
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
