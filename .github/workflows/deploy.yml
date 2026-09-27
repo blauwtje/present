@@ -1,0 +1,52 @@
+name: Deploy
+
+# Builds the app and publishes it on GitHub Pages with the catalog from release catalog-v1.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Add the released catalog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download catalog-v1 --pattern catalog.tar.gz --repo "$GITHUB_REPOSITORY"
+          tar -xzf catalog.tar.gz -C dist
+          node -e "const m=require('./dist/catalog/manifest.json');console.log('catalog', m.count, 'products', (m.totalBytes/1e6).toFixed(2), 'MB')"
+          du -sh dist dist/catalog dist/assets
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
